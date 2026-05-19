@@ -18,9 +18,12 @@ import {
 } from "@/lib/auth/validation";
 import { createClient } from "@/lib/supabase/client";
 
-function getRedirectUrl(path: string) {
-  if (typeof window === "undefined") return path;
-  return `${window.location.origin}${path}`;
+function getRedirectUrl(path: string = "") {
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    "http://localhost:3000";
+
+  return `${baseUrl}${path}`;
 }
 
 export function ForgotPasswordForm() {
