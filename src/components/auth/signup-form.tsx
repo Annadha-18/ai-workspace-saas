@@ -18,16 +18,9 @@ import {
 } from "@/lib/auth/validation";
 import { createClient } from "@/lib/supabase/client";
 
-function getRedirectUrl(path: string = "") {
-  const baseUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    "http://localhost:3000";
-
-  return `${baseUrl}${path}`;
-}
-
 export function SignupForm() {
   const router = useRouter();
+
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -37,38 +30,50 @@ export function SignupForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
     const nextErrors = validateSignup({
       fullName,
       email,
       password,
       confirmPassword,
     });
+
     setErrors(nextErrors);
+
     if (hasErrors(nextErrors)) return;
 
     setLoading(true);
-    const supabase = createClient();
 
-    const { error } = await supabase.auth.signUp({
-      email: email.trim(),
-      password,
-      options: {
-        data: { full_name: fullName.trim() },
-        emailRedirectTo: getRedirectUrl(
-          `${AUTH_ROUTES.callback}?next=${AUTH_ROUTES.dashboard}`
-        ),
-      },
-    });
+    try {
+      const supabase = createClient();
 
-    setLoading(false);
+      const { error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          data: {
+            full_name: fullName.trim(),
+          },
+          emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback`,
+        },
+      });
 
-    if (error) {
-      toast.error(error.message);
-      return;
+      if (error) {
+        toast.error(error.message);
+        return;
+      }
+
+      toast.success(
+        "Account created successfully! Please check your email to verify your account."
+      );
+
+      router.push(AUTH_ROUTES.login);
+    } catch (err) {
+      console.error(err);
+      toast.error("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
     }
-
-    toast.success("Account created! Check your email to confirm, or sign in.");
-    router.push(AUTH_ROUTES.login);
   }
 
   return (
@@ -105,7 +110,7 @@ export function SignupForm() {
             id="email"
             type="email"
             autoComplete="email"
-            placeholder="you@company.com"
+            placeholder="you@example.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             aria-invalid={!!errors.email}
@@ -128,7 +133,7 @@ export function SignupForm() {
 
         <FormField
           id="confirmPassword"
-          label="Confirm password"
+          label="Confirm Password"
           error={errors.confirmPassword}
         >
           <Input
@@ -143,14 +148,19 @@ export function SignupForm() {
           />
         </FormField>
 
-        <Button type="submit" className="h-10 w-full" size="lg" disabled={loading}>
+        <Button
+          type="submit"
+          className="h-10 w-full"
+          size="lg"
+          disabled={loading}
+        >
           {loading ? (
             <>
-              <Loader2 className="animate-spin" />
-              Creating account…
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Creating account...
             </>
           ) : (
-            "Create account"
+            "Create Account"
           )}
         </Button>
       </form>
