@@ -141,3 +141,4 @@ export async function POST(request: Request) {
 export function GET() {
   return jsonError("Method not allowed", 405);
 }
+
