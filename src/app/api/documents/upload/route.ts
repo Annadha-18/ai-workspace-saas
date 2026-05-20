@@ -187,8 +187,8 @@ export async function POST(request: Request) {
 
       return NextResponse.json(
         {
-          error:
-            "Failed to save document metadata. Make sure migrations are applied.",
+          error: dbError.message,
+          details: dbError,
         },
         { status: 500 }
       );
