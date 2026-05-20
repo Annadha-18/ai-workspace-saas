@@ -4,23 +4,36 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    // Handle both formats safely
-    let userMessage = "";
+    let messages = [];
+
+    // Supports:
+    // { message: "hello" }
+    // OR
+    // { messages: [...] }
 
     if (body.message) {
-      userMessage = body.message;
+      messages = [
+        {
+          role: "user",
+          content: body.message,
+        },
+      ];
     } else if (
       body.messages &&
-      Array.isArray(body.messages) &&
-      body.messages.length > 0
+      Array.isArray(body.messages)
     ) {
-      userMessage = body.messages[body.messages.length - 1].content || "";
+      messages = body.messages.filter(
+        (msg: any) =>
+          msg.role &&
+          msg.content &&
+          typeof msg.content === "string"
+      );
     }
 
-    if (!userMessage) {
+    if (!messages.length) {
       return NextResponse.json(
         {
-          error: "Message is required",
+          error: "No valid messages provided",
         },
         { status: 400 }
       );
@@ -36,12 +49,7 @@ export async function POST(req: Request) {
         },
         body: JSON.stringify({
           model: "llama-3.3-70b-versatile",
-          messages: [
-            {
-              role: "user",
-              content: userMessage,
-            },
-          ],
+          messages,
           temperature: 0.7,
           max_tokens: 1024,
         }),
@@ -50,26 +58,40 @@ export async function POST(req: Request) {
 
     const data = await response.json();
 
-    if (!response.ok) {
-      console.error(data);
+    console.log("Groq Response:", data);
 
+    if (!response.ok) {
       return NextResponse.json(
         {
-          error: data.error?.message || "Groq API Error",
+          error:
+            data?.error?.message ||
+            "Groq API request failed",
+        },
+        { status: response.status }
+      );
+    }
+
+    const aiReply =
+      data?.choices?.[0]?.message?.content;
+
+    if (!aiReply) {
+      return NextResponse.json(
+        {
+          error: "Empty AI response",
         },
         { status: 500 }
       );
     }
 
     return NextResponse.json({
-      reply: data.choices?.[0]?.message?.content || "No response",
+      reply: aiReply,
     });
-  } catch (error) {
-    console.error(error);
+  } catch (error: any) {
+    console.error("Chat API Error:", error);
 
     return NextResponse.json(
       {
-        error: "Internal Server Error",
+        error: error.message || "Internal Server Error",
       },
       { status: 500 }
     );
