@@ -3,7 +3,28 @@ import { NextResponse } from "next/server";
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const message = body.message;
+
+    // Handle both formats safely
+    let userMessage = "";
+
+    if (body.message) {
+      userMessage = body.message;
+    } else if (
+      body.messages &&
+      Array.isArray(body.messages) &&
+      body.messages.length > 0
+    ) {
+      userMessage = body.messages[body.messages.length - 1].content || "";
+    }
+
+    if (!userMessage) {
+      return NextResponse.json(
+        {
+          error: "Message is required",
+        },
+        { status: 400 }
+      );
+    }
 
     const response = await fetch(
       "https://api.groq.com/openai/v1/chat/completions",
@@ -18,7 +39,7 @@ export async function POST(req: Request) {
           messages: [
             {
               role: "user",
-              content: message,
+              content: userMessage,
             },
           ],
           temperature: 0.7,
@@ -34,21 +55,21 @@ export async function POST(req: Request) {
 
       return NextResponse.json(
         {
-          error: data.error?.message || "Groq API error",
+          error: data.error?.message || "Groq API Error",
         },
         { status: 500 }
       );
     }
 
     return NextResponse.json({
-      reply: data.choices[0].message.content,
+      reply: data.choices?.[0]?.message?.content || "No response",
     });
   } catch (error) {
     console.error(error);
 
     return NextResponse.json(
       {
-        error: "Internal server error",
+        error: "Internal Server Error",
       },
       { status: 500 }
     );
