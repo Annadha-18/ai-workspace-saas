@@ -12,7 +12,10 @@ import type { DocumentListItem } from "@/lib/documents/types";
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024) {
+    return `${(bytes / 1024).toFixed(1)} KB`;
+  }
+
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
@@ -31,25 +34,54 @@ export function DocumentList({
   onSelect,
   onDeleted,
 }: DocumentListProps) {
-  async function handleDelete(e: React.MouseEvent, id: string) {
+  async function handleDelete(
+    e: React.MouseEvent,
+    id: string
+  ) {
     e.stopPropagation();
-    if (!confirm("Delete this document and its file from storage?")) return;
 
-    const res = await fetch(`/api/documents/${id}`, { method: "DELETE" });
-    if (!res.ok) {
-      toast.error("Failed to delete document");
-      return;
+    const confirmed = confirm(
+      "Delete this document?"
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch(
+        `/api/documents/${id}`,
+        {
+          method: "DELETE",
+        }
+      );
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(
+          data.error || "Delete failed"
+        );
+      }
+
+      toast.success("Document deleted");
+
+      onDeleted(id);
+    } catch (error: any) {
+      toast.error(
+        error.message || "Failed to delete document"
+      );
     }
-    toast.success("Document deleted");
-    onDeleted(id);
   }
 
   return (
     <GlassCard className="flex h-full min-h-[320px] flex-col overflow-hidden">
       <div className="border-b border-white/10 p-4 dark:border-white/5">
-        <h3 className="font-semibold tracking-tight">Your documents</h3>
+        <h3 className="font-semibold tracking-tight">
+          Your documents
+        </h3>
+
         <p className="text-xs text-muted-foreground">
-          {documents.length} PDF{documents.length === 1 ? "" : "s"} uploaded
+          {documents.length} PDF
+          {documents.length === 1 ? "" : "s"} uploaded
         </p>
       </div>
 
@@ -60,7 +92,7 @@ export function DocumentList({
           </motion.div>
         ) : documents.length === 0 ? (
           <p className="px-3 py-8 text-center text-sm text-muted-foreground">
-            Upload a PDF to get started with AI analysis.
+            Upload a PDF to get started.
           </p>
         ) : (
           <ul className="space-y-1">
@@ -69,13 +101,25 @@ export function DocumentList({
                 key={doc.id}
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.04 }}
+                transition={{
+                  delay: i * 0.04,
+                }}
               >
-                <button
-                  type="button"
+                {/* OUTER DIV INSTEAD OF BUTTON */}
+                <div
+                  role="button"
+                  tabIndex={0}
                   onClick={() => onSelect(doc.id)}
+                  onKeyDown={(e) => {
+                    if (
+                      e.key === "Enter" ||
+                      e.key === " "
+                    ) {
+                      onSelect(doc.id);
+                    }
+                  }}
                   className={cn(
-                    "group flex w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left transition-colors",
+                    "group flex w-full cursor-pointer items-start gap-3 rounded-xl px-3 py-2.5 text-left transition-colors outline-none",
                     selectedId === doc.id
                       ? "bg-gradient-to-r from-violet-600/90 to-blue-600/90 text-white shadow-md"
                       : "hover:bg-white/50 dark:hover:bg-white/10"
@@ -91,8 +135,12 @@ export function DocumentList({
                   >
                     <FileText className="size-4" />
                   </span>
+
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{doc.file_name}</p>
+                    <p className="truncate text-sm font-medium">
+                      {doc.file_name}
+                    </p>
+
                     <p
                       className={cn(
                         "text-xs",
@@ -102,30 +150,44 @@ export function DocumentList({
                       )}
                     >
                       {formatBytes(doc.file_size)}
-                      {doc.page_count ? ` · ${doc.page_count} pages` : ""}
+
+                      {doc.page_count
+                        ? ` · ${doc.page_count} pages`
+                        : ""}
+
                       {" · "}
-                      {formatDistanceToNow(doc.created_at)}
+
+                      {formatDistanceToNow(
+                        doc.created_at
+                      )}
                     </p>
-                    {doc.summary && selectedId !== doc.id ? (
+
+                    {doc.summary &&
+                    selectedId !== doc.id ? (
                       <p className="mt-1 line-clamp-1 text-xs text-muted-foreground">
                         Summarized
                       </p>
                     ) : null}
                   </div>
+
+                  {/* DELETE BUTTON */}
                   <Button
                     type="button"
                     variant="ghost"
-                    size="icon-xs"
+                    size="icon"
                     className={cn(
-                      "shrink-0 opacity-0 group-hover:opacity-100",
-                      selectedId === doc.id && "text-white hover:bg-white/20"
+                      "shrink-0 opacity-0 transition-opacity group-hover:opacity-100",
+                      selectedId === doc.id &&
+                        "text-white hover:bg-white/20"
                     )}
-                    onClick={(e) => void handleDelete(e, doc.id)}
+                    onClick={(e) =>
+                      void handleDelete(e, doc.id)
+                    }
                     aria-label="Delete document"
                   >
-                    <Trash2 className="size-3.5" />
+                    <Trash2 className="size-4" />
                   </Button>
-                </button>
+                </div>
               </motion.li>
             ))}
           </ul>

@@ -3,67 +3,94 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth/api";
 import { getDocumentForUser } from "@/lib/documents/db";
 import { truncateForContext } from "@/lib/documents/text";
-import { getGeminiModel } from "@/lib/gemini";
+import { askGroq } from "@/lib/groq";
 
 export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-export const maxDuration = 60;
 
-type RouteContext = { params: Promise<{ id: string }> };
-
-const SUMMARIZE_PROMPT = `You are an expert document analyst. Produce a clear, structured summary of the PDF content in GitHub Flavored Markdown.
-
-Include:
-- A one-paragraph executive summary
-- **Key points** (bullet list)
-- **Important details** (entities, dates, numbers if present)
-- **Conclusion** or recommended next steps if applicable
-
-Base your answer only on the provided document text.`;
-
-export async function POST(_request: Request, context: RouteContext) {
-  const auth = await requireUser();
-  if (auth.error) return auth.error;
-
-  const { id } = await context.params;
-  const document = await getDocumentForUser(auth.supabase, auth.user.id, id);
-
-  if (!document) {
-    return NextResponse.json({ error: "Document not found" }, { status: 404 });
-  }
-
-  if (!document.extracted_text?.trim()) {
-    return NextResponse.json(
-      { error: "No extractable text in this document" },
-      { status: 400 }
-    );
-  }
-
-  if (document.summary) {
-    return NextResponse.json({ summary: document.summary });
-  }
-
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
-    const model = getGeminiModel("gemini-2.0-flash", SUMMARIZE_PROMPT);
-    const contextText = truncateForContext(document.extracted_text);
+    const auth = await requireUser();
 
-    const result = await model.generateContent(
-      `Document title: ${document.file_name}\n\n---\n\n${contextText}`
+    if (auth.error) {
+      return auth.error;
+    }
+
+    const { id } = await params;
+
+    const document = await getDocumentForUser(
+      auth.supabase,
+      auth.user.id,
+      id
     );
 
-    const summary = result.response.text();
+    if (!document) {
+      return NextResponse.json(
+        {
+          error: "Document not found",
+        },
+        { status: 404 }
+      );
+    }
+
+    if (!document.extracted_text) {
+      return NextResponse.json(
+        {
+          error: "No extracted text found",
+        },
+        { status: 400 }
+      );
+    }
+
+    const summary = await askGroq([
+      {
+        role: "system",
+        content: `
+You are an expert PDF summarizer.
+
+Generate:
+- Executive Summary
+- Key Points
+- Important Insights
+- Conclusion
+
+Use markdown formatting.
+`,
+      },
+      {
+        role: "user",
+        content: `
+Document Name:
+${document.file_name}
+
+Document Content:
+${truncateForContext(document.extracted_text.slice(0,10000))}
+`,
+      },
+    ]);
 
     await auth.supabase
       .from("documents")
-      .update({ summary })
-      .eq("id", id)
-      .eq("user_id", auth.user.id);
+      .update({
+        summary,
+      })
+      .eq("id", id);
 
-    return NextResponse.json({ summary });
-  } catch {
+    return NextResponse.json({
+      summary,
+    });
+  } catch (error: any) {
+    console.error(error);
+
     return NextResponse.json(
-      { error: "Failed to generate summary" },
-      { status: 502 }
+      {
+        error:
+          error.message ||
+          "Failed to generate summary",
+      },
+      { status: 500 }
     );
   }
 }
