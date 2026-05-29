@@ -66,7 +66,7 @@ say:
         content: `
 PDF Content:
 ${truncateForContext(
-  document.extracted_text.slice(0, 8000)
+  (document.extracted_text || "").slice(0, 8000)
 )}
 
 Question:
